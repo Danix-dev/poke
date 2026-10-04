@@ -128,24 +128,43 @@ jobs:
 
           grep -n "libasound.so.2" /root/r36s-port/build/05-build-and-package.sh
 
-      - name: Neutralize libpng cross-zlib advisory check
+      - name: Patch libpng check at the correct build stage
         shell: bash
         run: |
           set -euxo pipefail
           python3 - <<'PY'
           from pathlib import Path
 
-          p = Path("/root/mkxp-z/linux/downloads/armv7old/libpng/pngpriv.h")
+          p = Path("/root/r36s-port/build/04-build-deps.sh")
           s = p.read_text()
-          old = "#if PNG_ZLIB_VERNUM != 0 && PNG_ZLIB_VERNUM != ZLIB_VERNUM"
-          new = "#if 0 /* R36S cross-build: zlib target is provided explicitly */"
 
-          if old not in s:
-              raise SystemExit("libpng zlib include-path check not found")
+          marker = 'mk "$DL/libpng/Makefile" >/dev/null\n'
+          injection = '''mk "$DL/libpng/Makefile" >/dev/null
+# The generated pnglibconf.h can still pick up the host zlib version while the
+# actual target compile uses the cross-built zlib. Disable libpng's advisory
+# include-path consistency check after the source exists and before compilation.
+python3 - "$DL/libpng/pngpriv.h" <<'PYPNG'
+import pathlib, sys
+p = pathlib.Path(sys.argv[1])
+t = p.read_text()
+old = "#if PNG_ZLIB_VERNUM != 0 && PNG_ZLIB_VERNUM != ZLIB_VERNUM"
+new = "#if 0 /* R36S cross-build: target zlib is provided explicitly */"
+if old not in t and new not in t:
+    raise SystemExit("FATAL: libpng zlib advisory check not found")
+if old in t:
+    p.write_text(t.replace(old, new, 1))
+PYPNG
+grep -q "R36S cross-build: target zlib" "$DL/libpng/pngpriv.h" \
+    || { echo "FATAL: could not disable libpng zlib advisory check"; exit 1; }
+'''
 
-          p.write_text(s.replace(old, new, 1))
+          if marker not in s:
+              raise SystemExit("libpng configure marker not found in build script")
+
+          p.write_text(s.replace(marker, injection, 1))
           PY
-          grep -n -A3 "R36S cross-build" /root/mkxp-z/linux/downloads/armv7old/libpng/pngpriv.h
+
+          grep -n -A20 'libpng  (with' /root/r36s-port/build/04-build-deps.sh
 
       - name: Build dependencies
         shell: bash
