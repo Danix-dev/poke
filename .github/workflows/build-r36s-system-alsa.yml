@@ -44,6 +44,29 @@ jobs:
           cd /root/r36s-port
           build/02-gpu-stubs.sh
 
+      - name: Pin mkxp-z to pre-overhaul revision
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path("/root/r36s-port/build/03-source-and-patches.sh")
+          s = p.read_text()
+          old = 'git clone -q --recurse-submodules https://github.com/mkxp-z/mkxp-z "$SRC"'
+          new = '''git clone -q --recurse-submodules https://github.com/mkxp-z/mkxp-z "$SRC"
+          git -C "$SRC" checkout -q 826929eeb3ebc4b887c011604919217a790770f4
+          git -C "$SRC" submodule sync --recursive
+          git -C "$SRC" submodule update --init --recursive'''
+
+          if old not in s:
+              raise SystemExit("mkxp-z clone command not found in R36S port script")
+
+          p.write_text(s.replace(old, new, 1))
+          PY
+
+          grep -n -A4 "git clone -q --recurse-submodules" /root/r36s-port/build/03-source-and-patches.sh
+
       - name: Fetch mkxp-z and apply original R36S patches
         shell: bash
         run: |
@@ -52,6 +75,7 @@ jobs:
           build/03-source-and-patches.sh
           cd /root/mkxp-z
           git rev-parse HEAD | tee /root/mkxp-z-commit.txt
+          test "$(cat /root/mkxp-z-commit.txt)" = "826929eeb3ebc4b887c011604919217a790770f4"
 
       - name: Force OpenAL to link system ALSA
         shell: bash
