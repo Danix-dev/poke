@@ -391,14 +391,14 @@ jobs:
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.1.0
-          name: R36S mkxp-z Audio + Controller Text Entry Fix v1.1.0
+          tag_name: v1.1.1
+          name: R36S mkxp-z Audio + Controller Text Entry Fix v1.1.1
           target_commitish: ${{ github.sha }}
           make_latest: true
           body: |
             Confirmed working compatibility package for ARM32 mkxp-z games on R36S / ArkOS.
 
-            v1.1.0 adds controller-friendly text entry for Pokemon Essentials/Reborn/Rejuvenation-style games. When a game provides its built-in PokemonEntryScene character grid, the patch forces USEKEYBOARD=false so the R36S can enter names/text without a physical keyboard.
+            v1.1.1 adds the corrected controller-friendly text entry fix for Pokemon Essentials/Reborn/Rejuvenation-style games. When a game provides its built-in PokemonEntryScene character grid, the patch forces USEKEYBOARD=false so the R36S can enter names/text without a physical keyboard.
 
             Audio root cause found during testing:
             - ArkOS native aplay is AArch64 and works with the RK817 codec.
