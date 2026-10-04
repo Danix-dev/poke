@@ -1,21 +1,55 @@
-# R36S / ArkOS controller text-entry compatibility for Pokemon Essentials-family games.
+# R36S / ArkOS controller-friendly text entry for Pokemon Essentials-family games.
 #
-# Many older Pokemon Essentials/Reborn/Rejuvenation games ship two text-entry modes:
-#   USEKEYBOARD = true  -> physical keyboard + Input.gets
-#   USEKEYBOARD = false -> built-in on-screen character grid controlled by gamepad
+# Modern Pokemon Essentials chooses the naming/text-entry scene in pbEnterText:
+#   $PokemonSystem.textinput == 1 -> physical keyboard
+#   otherwise                     -> controller/cursor character grid
 #
-# R36S has no physical keyboard, so force the game's existing controller-friendly mode
-# when the expected PokemonEntryScene class is present. On unrelated games this is a no-op.
+# On R36S there is no physical keyboard. Wrap pbEnterText and temporarily force
+# cursor mode only while the text-entry scene is open. The user's saved setting
+# is restored afterwards.
+#
+# Older Essentials variants are handled by the USEKEYBOARD fallback below.
+# Unrelated games are left untouched.
 
 begin
+  if respond_to?(:pbEnterText, true)
+    unless respond_to?(:r36s_pbEnterText_original, true)
+      alias r36s_pbEnterText_original pbEnterText
+
+      def pbEnterText(*args, &block)
+        changed = false
+        old_value = nil
+
+        begin
+          if defined?($PokemonSystem) && $PokemonSystem &&
+             $PokemonSystem.respond_to?(:textinput) &&
+             $PokemonSystem.respond_to?(:textinput=)
+            old_value = $PokemonSystem.textinput
+            $PokemonSystem.textinput = 0
+            changed = true
+          end
+
+          r36s_pbEnterText_original(*args, &block)
+        ensure
+          if changed && defined?($PokemonSystem) && $PokemonSystem &&
+             $PokemonSystem.respond_to?(:textinput=)
+            $PokemonSystem.textinput = old_value
+          end
+        end
+      end
+    end
+  end
+
+  # Fallback for older Essentials/Reborn/Rejuvenation-style implementations.
   if defined?(PokemonEntryScene) && PokemonEntryScene.const_defined?(:USEKEYBOARD)
     if PokemonEntryScene.const_get(:USEKEYBOARD)
       PokemonEntryScene.send(:remove_const, :USEKEYBOARD)
       PokemonEntryScene.const_set(:USEKEYBOARD, false)
-      if defined?(System) && System.respond_to?(:puts)
-        System.puts("[R36S] Controller text entry enabled (PokemonEntryScene::USEKEYBOARD=false)")
-      end
     end
+  end
+
+  if defined?(System) && System.respond_to?(:puts)
+    System.puts("[R36S] Controller text-entry compatibility patch loaded")
   end
 rescue Exception => e
   if defined?(System) && System.respond_to?(:puts)
