@@ -135,6 +135,27 @@ The generic runner automatically configures:
 - OpenAL -> ALSA;
 - ARM32 ALSA plugins when available.
 
+## Controller text entry on R36S
+
+Some Pokemon Essentials-family games (including Reborn/Rejuvenation-era projects) contain **two** name/text-entry modes:
+
+- physical keyboard mode: `PokemonEntryScene::USEKEYBOARD = true`;
+- built-in on-screen character grid: `PokemonEntryScene::USEKEYBOARD = false`.
+
+On an R36S, the first mode can open normally but cannot receive typed characters because the handheld controls are a game controller, not a physical keyboard.
+
+Starting with **v1.1.0**, this project ships:
+
+```text
+r36s-controller-text-entry.rb
+```
+
+The R36S mkxp-z build loads it after the game's Ruby scripts. If the game exposes the compatible `PokemonEntryScene::USEKEYBOARD` switch, the patch changes it to `false`, causing the game to use its **own controller-friendly on-screen keyboard**.
+
+The patch is intentionally conservative: on games that do not define that class/constant, it does nothing.
+
+This is preferable to emulating Windows keyboard APIs because the affected text-entry code already uses mkxp-z's `Input.text_input` / `Input.gets` path and the game already includes a gamepad UI.
+
 ## Game-specific Ruby fixes
 
 This project fixes the **engine/audio layer**.
