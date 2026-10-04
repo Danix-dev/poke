@@ -1,0 +1,183 @@
+name: Build R36S mkxp-z system ALSA
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: ubuntu:20.04
+
+    steps:
+      - name: Bootstrap container
+        shell: bash
+        run: |
+          set -euxo pipefail
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update
+          apt-get install -y --no-install-recommends             ca-certificates git sudo python3 file binutils zip unzip xz-utils             curl wget build-essential cmake ninja-build autoconf automake             pkg-config libtool libtool-bin bison
+
+      - name: Clone R36S port
+        shell: bash
+        run: |
+          set -euxo pipefail
+          git clone https://github.com/Periko21/mkxp-z-r36s.git /root/r36s-port
+          ln -s /root/r36s-port/build /root/build
+          chmod +x /root/r36s-port/build/*.sh
+          cd /root/r36s-port
+          git rev-parse HEAD | tee /root/r36s-port-commit.txt
+
+      - name: Prepare ARM toolchain
+        shell: bash
+        run: |
+          set -euxo pipefail
+          cd /root/r36s-port
+          build/01-host-toolchain.sh
+
+      - name: Prepare GPU stubs
+        shell: bash
+        run: |
+          set -euxo pipefail
+          cd /root/r36s-port
+          build/02-gpu-stubs.sh
+
+      - name: Fetch mkxp-z and apply original R36S patches
+        shell: bash
+        run: |
+          set -euxo pipefail
+          cd /root/r36s-port
+          build/03-source-and-patches.sh
+          cd /root/mkxp-z
+          git rev-parse HEAD | tee /root/mkxp-z-commit.txt
+
+      - name: Force OpenAL to link system ALSA
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path("/root/mkxp-z/linux/Makefile")
+          s = p.read_text()
+
+          lines = s.splitlines()
+          changed = False
+          for i, line in enumerate(lines):
+              if line.startswith("OPENAL_FLAGS :=") and "ALSOFT_DLOPEN" not in line:
+                  lines[i] = line.replace(
+                      "OPENAL_FLAGS :=",
+                      "OPENAL_FLAGS := -DALSOFT_DLOPEN=OFF"
+                  )
+                  changed = True
+                  break
+
+          if not changed and not any("ALSOFT_DLOPEN=OFF" in x for x in lines):
+              raise SystemExit("Could not patch OPENAL_FLAGS")
+
+          p.write_text("\n".join(lines) + "\n")
+          PY
+
+          grep -n "OPENAL_FLAGS :=" /root/mkxp-z/linux/Makefile | head -5
+
+      - name: Allow libasound as ArkOS system library
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path("/root/r36s-port/build/05-build-and-package.sh")
+          s = p.read_text()
+          old = "libutil.so.1|libcrypt.so.[12]|ld-linux-armhf.so.3"
+          new = "libutil.so.1|libcrypt.so.[12]|libasound.so.2|ld-linux-armhf.so.3"
+
+          if old in s:
+              s = s.replace(old, new, 1)
+          elif "libasound.so.2" not in s:
+              raise SystemExit("Could not patch package dependency allow-list")
+
+          p.write_text(s)
+          PY
+
+          grep -n "libasound.so.2" /root/r36s-port/build/05-build-and-package.sh
+
+      - name: Build dependencies
+        shell: bash
+        run: |
+          set -euxo pipefail
+          cd /root/r36s-port
+          build/04-build-deps.sh
+
+      - name: Build mkxp-z and package
+        shell: bash
+        run: |
+          set -euxo pipefail
+          cd /root/r36s-port
+          build/05-build-and-package.sh
+
+      - name: Verify ALSA linkage
+        shell: bash
+        run: |
+          set -euxo pipefail
+          BIN=/root/package/mkxp/mkxp-z
+          test -x "$BIN"
+
+          mkdir -p /root/artifact
+          file "$BIN" | tee /root/artifact/file.txt
+          arm-linux-gnueabihf-readelf -d "$BIN" | tee /root/artifact/readelf-dynamic.txt
+
+          if ! arm-linux-gnueabihf-readelf -d "$BIN" | grep -q "libasound.so.2"; then
+            echo "ERROR: final mkxp-z does not have libasound.so.2 in DT_NEEDED" >&2
+            exit 1
+          fi
+
+          cp "$BIN" /root/artifact/mkxp-z
+          chmod +x /root/artifact/mkxp-z
+          cp /root/fire-ash-port.zip /root/artifact/fire-ash-port-system-alsa.zip
+
+          {
+            echo "R36S mkxp-z system ALSA build"
+            echo
+            echo "R36S port commit:"
+            cat /root/r36s-port-commit.txt
+            echo
+            echo "mkxp-z commit:"
+            cat /root/mkxp-z-commit.txt
+            echo
+            echo "Patch: OpenAL Soft built with ALSOFT_DLOPEN=OFF"
+            echo "Expected runtime dependency: libasound.so.2 from ArkOS"
+          } > /root/artifact/BUILD-INFO.txt
+
+          cat > /root/artifact/INSTALL.txt <<'EOF'
+          INSTALL ON R36S
+          ================
+
+          1. Back up:
+             /roms/ports/mkxp/mkxp-z
+
+          2. Replace ONLY that file with the new mkxp-z in this artifact.
+
+          3. Do NOT replace:
+             Scripts/
+             RTP.rb
+             Load.rb
+             Updater.rb
+             DiscordRichPresence.rb
+             Data/
+             Graphics/
+             Audio/
+             saves
+
+          The existing Rejuvenation compatibility fixes stay untouched.
+          EOF
+
+      - name: Upload R36S engine
+        uses: actions/upload-artifact@v4
+        with:
+          name: r36s-mkxp-z-system-alsa
+          path: /root/artifact/
+          if-no-files-found: error
+          retention-days: 7
