@@ -5,6 +5,9 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -12,6 +15,11 @@ jobs:
       image: ubuntu:20.04
 
     steps:
+      - name: Checkout helper scripts
+        uses: actions/checkout@v4
+        with:
+          path: self
+
       - name: Bootstrap container
         shell: bash
         run: |
@@ -260,34 +268,68 @@ jobs:
             cat /root/mkxp-z-commit.txt
             echo
             echo "Patch: OpenAL Soft built with ALSOFT_DLOPEN=OFF"
-            echo "Expected runtime dependency: libasound.so.2 from ArkOS"
+            echo "Patch: ARM32 alsa-lib built with _TIME_BITS=64 and _FILE_OFFSET_BITS=64"
+            echo "Runtime: local libasound.so.2 next to mkxp-z"
+            echo "ALSA config: /usr/share/alsa via ALSA_CONFIG_DIR + ALSA_CONFIG_PATH"
           } > /root/artifact/BUILD-INFO.txt
 
-          cat > /root/artifact/INSTALL.txt <<'EOF'
-          INSTALL ON R36S
-          ================
+          # Package reusable generic runner from this repository.
+          cp "$GITHUB_WORKSPACE/self/scripts/run-mkxp-time64.sh" /root/artifact/run-mkxp-time64.sh
+          cp "$GITHUB_WORKSPACE/self/scripts/example-game.sh" /root/artifact/example-game.sh
+          chmod +x /root/artifact/run-mkxp-time64.sh /root/artifact/example-game.sh
 
-          1. Back up:
+          cat > /root/artifact/INSTALL.txt <<'EOF'
+          R36S / ARKOS MKXP-Z AUDIO FIX
+          =============================
+
+          1. Back up your current:
              /roms/ports/mkxp/mkxp-z
 
-          2. Replace that file with the new mkxp-z in this artifact.
+          2. Copy these files to:
+             /roms/ports/mkxp/
 
-          3. Copy libasound.so.2.0.0 and libasound.so.2 from this artifact
-             into /roms/ports/mkxp/ next to mkxp-z.
+             mkxp-z
+             libasound.so.2
+             libasound.so.2.0.0
+             run-mkxp-time64.sh
 
-          4. Do NOT replace:
-             Scripts/
-             RTP.rb
-             Load.rb
-             Updater.rb
-             DiscordRichPresence.rb
-             Data/
-             Graphics/
-             Audio/
-             saves
+          3. Ensure the engine and runner are executable:
+             chmod +x /roms/ports/mkxp/mkxp-z
+             chmod +x /roms/ports/mkxp/run-mkxp-time64.sh
 
-          The existing Rejuvenation compatibility fixes stay untouched.
+          4. For each compatible game, create a launcher in /roms/ports/
+             based on example-game.sh and change only GAME_DIR.
+
+          IMPORTANT:
+          The working runner sets:
+             ALSA_CONFIG_DIR=/usr/share/alsa
+             ALSA_CONFIG_PATH=/usr/share/alsa/alsa.conf
+             ALSOFT_DRIVERS=alsa
+
+          Keep game-specific Scripts/, Data/, Graphics/, Audio/ and saves intact.
           EOF
+
+      - name: Create generic release package
+        shell: bash
+        run: |
+          set -euxo pipefail
+          PKG=/root/release/r36s-mkxp-time64-alsa
+          mkdir -p "$PKG"
+          cp /root/artifact/mkxp-z "$PKG/"
+          cp -L /root/artifact/libasound.so.2 "$PKG/libasound.so.2"
+          cp /root/artifact/libasound.so.2.0.0 "$PKG/"
+          cp /root/artifact/run-mkxp-time64.sh "$PKG/"
+          cp /root/artifact/example-game.sh "$PKG/"
+          cp /root/artifact/INSTALL.txt "$PKG/"
+          cp /root/artifact/BUILD-INFO.txt "$PKG/"
+          (
+            cd /root/release
+            zip -9 -r /root/artifact/r36s-mkxp-time64-alsa.zip r36s-mkxp-time64-alsa
+          )
+          (
+            cd /root/artifact
+            sha256sum mkxp-z libasound.so.2 libasound.so.2.0.0 run-mkxp-time64.sh r36s-mkxp-time64-alsa.zip > SHA256SUMS.txt
+          )
 
       - name: Upload R36S engine
         uses: actions/upload-artifact@v4
@@ -296,3 +338,38 @@ jobs:
           path: /root/artifact/
           if-no-files-found: error
           retention-days: 7
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.0
+          name: R36S mkxp-z Time64 ALSA Audio Fix v1.0.0
+          target_commitish: ${{ github.sha }}
+          make_latest: true
+          body: |
+            Confirmed working audio fix for ARM32 mkxp-z games on R36S / ArkOS.
+
+            Root cause found during testing:
+            - ArkOS native aplay is AArch64 and works with the RK817 codec.
+            - ARM32 mkxp-z hits the ALSA 32-bit compatibility path.
+            - A custom ARM32 time64 alsa-lib plus the real ArkOS ALSA config tree fixes playback.
+
+            Recommended download: r36s-mkxp-time64-alsa.zip
+
+            Required runtime settings are already handled by run-mkxp-time64.sh:
+            - ALSA_CONFIG_DIR=/usr/share/alsa
+            - ALSA_CONFIG_PATH=/usr/share/alsa/alsa.conf
+            - ALSOFT_DRIVERS=alsa
+
+            See the repository README for installation, generic per-game launchers, and troubleshooting.
+          files: |
+            /root/artifact/r36s-mkxp-time64-alsa.zip
+            /root/artifact/mkxp-z
+            /root/artifact/libasound.so.2
+            /root/artifact/libasound.so.2.0.0
+            /root/artifact/run-mkxp-time64.sh
+            /root/artifact/example-game.sh
+            /root/artifact/INSTALL.txt
+            /root/artifact/BUILD-INFO.txt
+            /root/artifact/SHA256SUMS.txt
+          fail_on_unmatched_files: true
