@@ -88,6 +88,39 @@ jobs:
           git rev-parse HEAD | tee /root/mkxp-z-commit.txt
           test "$(cat /root/mkxp-z-commit.txt)" = "826929eeb3ebc4b887c011604919217a790770f4"
 
+      - name: Enable controller text-entry compatibility
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path("/root/mkxp-z/binding/binding-mri.cpp")
+          s = p.read_text()
+
+          old = '''RB_METHOD_GUARD(mriRgssMain) {
+              RB_UNUSED_PARAM;
+
+              /* Execute postload scripts */'''
+
+          new = '''RB_METHOD_GUARD(mriRgssMain) {
+              RB_UNUSED_PARAM;
+
+              /* R36S/ArkOS: after the game's scripts are loaded, apply the
+               * optional controller-friendly Pokemon Essentials text-entry
+               * compatibility patch shipped next to the engine. */
+              runCustomScript("/roms/ports/mkxp/r36s-controller-text-entry.rb");
+
+              /* Execute postload scripts */'''
+
+          if old not in s:
+              raise SystemExit("mriRgssMain patch point not found")
+
+          p.write_text(s.replace(old, new, 1))
+          PY
+
+          grep -n -A12 "R36S/ArkOS: after the game's scripts" /root/mkxp-z/binding/binding-mri.cpp
+
       - name: Force OpenAL to link system ALSA
         shell: bash
         run: |
@@ -227,6 +260,18 @@ jobs:
           cd /root/r36s-port
           build/05-build-and-package.sh
 
+      - name: Package controller text-entry patch
+        shell: bash
+        run: |
+          set -euxo pipefail
+          cp "$GITHUB_WORKSPACE/self/patches/r36s-controller-text-entry.rb" /root/package/mkxp/
+          (
+            cd /root/package
+            rm -f /root/fire-ash-port.zip
+            zip -qr /root/fire-ash-port.zip "Fire Ash.sh" mkxp/
+          )
+          test -f /root/package/mkxp/r36s-controller-text-entry.rb
+
       - name: Verify ALSA linkage
         shell: bash
         run: |
@@ -245,6 +290,8 @@ jobs:
 
           cp "$BIN" /root/artifact/mkxp-z
           chmod +x /root/artifact/mkxp-z
+
+          cp "$GITHUB_WORKSPACE/self/patches/r36s-controller-text-entry.rb" /root/artifact/
 
           # Ship the ARM32 time64 libasound next to mkxp-z so the binary's
           # $ORIGIN RUNPATH selects it before ArkOS' broken armhf compat copy.
@@ -271,6 +318,7 @@ jobs:
             echo "Patch: ARM32 alsa-lib built with _TIME_BITS=64 and _FILE_OFFSET_BITS=64"
             echo "Runtime: local libasound.so.2 next to mkxp-z"
             echo "ALSA config: /usr/share/alsa via ALSA_CONFIG_DIR + ALSA_CONFIG_PATH"
+            echo "Controller text entry: PokemonEntryScene::USEKEYBOARD forced false when supported"
           } > /root/artifact/BUILD-INFO.txt
 
           # Package reusable generic runner from this repository.
@@ -320,6 +368,7 @@ jobs:
           cp /root/artifact/libasound.so.2.0.0 "$PKG/"
           cp /root/artifact/run-mkxp-time64.sh "$PKG/"
           cp /root/artifact/example-game.sh "$PKG/"
+          cp /root/artifact/r36s-controller-text-entry.rb "$PKG/"
           cp /root/artifact/INSTALL.txt "$PKG/"
           cp /root/artifact/BUILD-INFO.txt "$PKG/"
           (
@@ -328,7 +377,7 @@ jobs:
           )
           (
             cd /root/artifact
-            sha256sum mkxp-z libasound.so.2 libasound.so.2.0.0 run-mkxp-time64.sh r36s-mkxp-time64-alsa.zip > SHA256SUMS.txt
+            sha256sum mkxp-z libasound.so.2 libasound.so.2.0.0 run-mkxp-time64.sh r36s-controller-text-entry.rb r36s-mkxp-time64-alsa.zip > SHA256SUMS.txt
           )
 
       - name: Upload R36S engine
@@ -342,14 +391,16 @@ jobs:
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0.0
-          name: R36S mkxp-z Time64 ALSA Audio Fix v1.0.0
+          tag_name: v1.1.0
+          name: R36S mkxp-z Audio + Controller Text Entry Fix v1.1.0
           target_commitish: ${{ github.sha }}
           make_latest: true
           body: |
-            Confirmed working audio fix for ARM32 mkxp-z games on R36S / ArkOS.
+            Confirmed working compatibility package for ARM32 mkxp-z games on R36S / ArkOS.
 
-            Root cause found during testing:
+            v1.1.0 adds controller-friendly text entry for Pokemon Essentials/Reborn/Rejuvenation-style games. When a game provides its built-in PokemonEntryScene character grid, the patch forces USEKEYBOARD=false so the R36S can enter names/text without a physical keyboard.
+
+            Audio root cause found during testing:
             - ArkOS native aplay is AArch64 and works with the RK817 codec.
             - ARM32 mkxp-z hits the ALSA 32-bit compatibility path.
             - A custom ARM32 time64 alsa-lib plus the real ArkOS ALSA config tree fixes playback.
@@ -369,6 +420,7 @@ jobs:
             /root/artifact/libasound.so.2.0.0
             /root/artifact/run-mkxp-time64.sh
             /root/artifact/example-game.sh
+            /root/artifact/r36s-controller-text-entry.rb
             /root/artifact/INSTALL.txt
             /root/artifact/BUILD-INFO.txt
             /root/artifact/SHA256SUMS.txt
