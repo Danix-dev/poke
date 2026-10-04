@@ -158,7 +158,12 @@ jobs:
         run: |
           set -euxo pipefail
           cd /root/r36s-port
-          build/04-build-deps.sh
+          if ! build/04-build-deps.sh; then
+            echo "===== OPENAL BUILD LOG ====="
+            cat /tmp/openal-build.log 2>/dev/null || true
+            echo "===== END OPENAL BUILD LOG ====="
+            exit 1
+          fi
 
       - name: Build mkxp-z and package
         shell: bash
