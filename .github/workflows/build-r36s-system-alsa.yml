@@ -18,7 +18,7 @@ jobs:
           set -euxo pipefail
           export DEBIAN_FRONTEND=noninteractive
           apt-get update
-          apt-get install -y --no-install-recommends             ca-certificates git sudo python3 file binutils zip unzip xz-utils             curl wget build-essential cmake ninja-build autoconf automake             pkg-config libtool libtool-bin bison ruby xxd zlib1g-dev libbz2-dev xorg-dev libgl1-mesa-dev libasound2-dev libpulse-dev
+          apt-get install -y --no-install-recommends             ca-certificates git sudo python3 file binutils zip unzip xz-utils             curl wget build-essential cmake ninja-build autoconf automake             pkg-config libtool libtool-bin bison ruby xxd zlib1g-dev libbz2-dev
 
       - name: Clone R36S port
         shell: bash
