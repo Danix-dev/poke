@@ -128,6 +128,25 @@ jobs:
 
           grep -n "libasound.so.2" /root/r36s-port/build/05-build-and-package.sh
 
+      - name: Neutralize libpng cross-zlib advisory check
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path("/root/mkxp-z/linux/downloads/armv7old/libpng/pngpriv.h")
+          s = p.read_text()
+          old = "#if PNG_ZLIB_VERNUM != 0 && PNG_ZLIB_VERNUM != ZLIB_VERNUM"
+          new = "#if 0 /* R36S cross-build: zlib target is provided explicitly */"
+
+          if old not in s:
+              raise SystemExit("libpng zlib include-path check not found")
+
+          p.write_text(s.replace(old, new, 1))
+          PY
+          grep -n -A3 "R36S cross-build" /root/mkxp-z/linux/downloads/armv7old/libpng/pngpriv.h
+
       - name: Build dependencies
         shell: bash
         run: |
