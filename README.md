@@ -1,7 +1,4 @@
-# R36S / ArkOS mkxp-z Audio Fix
-
-> [!WARNING]
-> **Controller text-entry fix is currently experimental.** The v1.1.1 text-entry patch is not confirmed across Rejuvenation builds and can cause crashes. For the confirmed audio fix, use **v1.0.0**. Do not modify a game's `Scripts/TextEntry.rb` unless you have first backed it up and verified the exact game version.
+# R36S / ArkOS mkxp-z Audio + Rejuvenation Text Entry Fix
 
 A practical fix for **RPG Maker XP / mkxp-z games on R36S / ArkOS** that start correctly but have no audio or fail with:
 
@@ -15,6 +12,7 @@ This repository contains:
 - a custom **ARM32 time64 alsa-lib**;
 - reusable launch scripts;
 - the GitHub Actions build workflow used to reproduce the binaries;
+- a **verified Pokémon Rejuvenation controller text-entry fix** for handhelds without a physical keyboard;
 - technical notes explaining the root cause.
 
 ## Confirmed working
@@ -138,26 +136,47 @@ The generic runner automatically configures:
 - OpenAL -> ALSA;
 - ARM32 ALSA plugins when available.
 
-## Controller text entry on R36S
+## Controller text entry on R36S — verified on Pokémon Rejuvenation
 
-Some Pokemon Essentials-family games (including Reborn/Rejuvenation-era projects) contain **two** name/text-entry modes:
+Pokémon Rejuvenation already contains controller-driven character-grid text-entry scenes. The issue on R36S is that the game can route name/text entry to its physical-keyboard path, which depends on SDL text input and cannot receive arbitrary characters from the handheld controls.
 
-- physical keyboard mode: `PokemonEntryScene::USEKEYBOARD = true`;
-- built-in on-screen character grid: `PokemonEntryScene::USEKEYBOARD = false`.
+In the tested Rejuvenation build, `Scripts/TextEntry.rb` makes this choice through `$Settings.useKeyboard?`. The working R36S fix patches the existing file **in place** so its two routing points choose the game's own controller character grid:
 
-On an R36S, the first mode can open normally but cannot receive typed characters because the handheld controls are a game controller, not a physical keyboard.
+- `Kernel.pbMessageFreeText`: use the non-keyboard branch;
+- `pbEnterText`: use the non-keyboard / character-grid branch.
 
-Starting with **v1.1.0**, this project ships:
+This was physically verified on an R36S: the on-screen character grid appeared, a player name was entered using the handheld controls, and Rejuvenation accepted it.
 
-```text
-r36s-controller-text-entry.rb
+Run:
+
+```bash
+/roms/ports/mkxp/fix-rejuvenation-text-entry.sh
 ```
 
-The R36S mkxp-z build loads it after the game's Ruby scripts. If the game exposes the compatible `PokemonEntryScene::USEKEYBOARD` switch, the patch changes it to `false`, causing the game to use its **own controller-friendly on-screen keyboard**.
+The helper defaults to `/roms/ports/mkxp`. If the game is elsewhere, pass its directory:
 
-The patch is intentionally conservative: on games that do not define that class/constant, it does nothing.
+```bash
+/roms/ports/mkxp/fix-rejuvenation-text-entry.sh "/roms/ports/Pokemon Rejuvenation"
+```
 
-This is preferable to emulating Windows keyboard APIs because the affected text-entry code already uses mkxp-z's `Input.text_input` / `Input.gets` path and the game already includes a gamepad UI.
+The helper:
+
+1. backs up `Scripts/TextEntry.rb` as `TextEntry.rb.r36s-original`;
+2. removes obsolete experimental `TextEntry-R36S-*.rb` copies;
+3. patches only the two routing decisions;
+4. validates both changes;
+5. restores the backup automatically if the expected Rejuvenation code is not found.
+
+To undo the fix:
+
+```bash
+/roms/ports/mkxp/restore-rejuvenation-text-entry.sh
+```
+
+> [!IMPORTANT]
+> Do **not** place a second complete `TextEntry.rb` implementation in Rejuvenation's `Scripts/` directory. Duplicate loose Ruby scripts can redefine the same classes/methods and cause crashes.
+
+The old generic `r36s-controller-text-entry.rb` injection has been removed. This fix is confirmed for the tested Rejuvenation build; other Pokémon Essentials fangames may use different text-entry code.
 
 ## Game-specific Ruby fixes
 
@@ -253,7 +272,7 @@ This solution builds on the existing R36S mkxp-z port and the upstream projects:
 - ArkOS
 - the R36S community
 
-The repository exists mainly to make this specific R36S ARM32/ArkOS audio compatibility fix reproducible and easier for other users to apply.
+The repository exists mainly to make the verified R36S ARM32/ArkOS audio fix and the tested Rejuvenation controller text-entry fix reproducible and easier for other users to apply.
 
 ## Disclaimer
 
