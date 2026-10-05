@@ -1,5 +1,8 @@
 # R36S / ArkOS mkxp-z Audio Fix
 
+> [!WARNING]
+> **Controller text-entry fix is currently experimental.** The v1.1.1 text-entry patch is not confirmed across Rejuvenation builds and can cause crashes. For the confirmed audio fix, use **v1.0.0**. Do not modify a game's `Scripts/TextEntry.rb` unless you have first backed it up and verified the exact game version.
+
 A practical fix for **RPG Maker XP / mkxp-z games on R36S / ArkOS** that start correctly but have no audio or fail with:
 
 ```text
