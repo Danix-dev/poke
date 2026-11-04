@@ -178,6 +178,20 @@ To undo the fix:
 
 The old generic `r36s-controller-text-entry.rb` injection has been removed. This fix is confirmed for the tested Rejuvenation build; other Pokémon Essentials fangames may use different text-entry code.
 
+## Additional fixes and utilities
+
+Optional helpers are available in `extras/` and are intentionally kept separate from the core audio/text-entry build.
+
+They include:
+
+- an automatic R36S runtime installer;
+- a diagnostics script for audio, SDL, controller/input and architecture checks;
+- ready-made launchers for **Pokemon Reborn**, **Pokemon Rejuvenation** and **Pokemon Desolation**.
+
+The generic runtime and launcher helpers are compatible with compatible Linux/mkxp-z builds of all three games. The Rejuvenation `TextEntry.rb` modification remains a game-specific fix and is only claimed as physically verified on Pokemon Rejuvenation.
+
+See `extras/README.md` for usage and scope.
+
 ## Game-specific Ruby fixes
 
 This project fixes the **engine/audio layer**.
