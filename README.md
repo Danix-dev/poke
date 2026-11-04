@@ -186,6 +186,8 @@ They include:
 
 - an automatic R36S runtime installer;
 - a diagnostics script for audio, SDL, controller/input and architecture checks;
+- a reusable ArkOS `gptokeyb` controller mapping;
+- separate SDL/KMSDRM low-latency runtime settings;
 - ready-made launchers for **Pokemon Reborn**, **Pokemon Rejuvenation** and **Pokemon Desolation**.
 
 The generic runtime and launcher helpers are compatible with compatible Linux/mkxp-z builds of all three games. The Rejuvenation `TextEntry.rb` modification remains a game-specific fix and is only claimed as physically verified on Pokemon Rejuvenation.
