@@ -104,3 +104,47 @@ GAME_DIR="/roms/ports/Reborn" ./pokemon-reborn.sh
 ## Scope
 
 These helpers intentionally remain separate from the main release/build workflow. This keeps the core audio/time64 fix reproducible while making optional installation, launch and troubleshooting helpers available to users who need them.
+
+## Controller mapping
+
+The `controller/` directory contains a reusable ArkOS `gptokeyb` profile and wrapper:
+
+- `pokemon-essentials.gptk`
+- `run-with-gptokeyb.sh`
+
+The mapping used during R36S testing is:
+
+- D-pad and left analog stick -> arrow keys
+- A -> C
+- B -> X
+- X -> Z
+- Y -> A
+- Start -> Enter
+- L1 -> Left Shift
+- R1 -> Right Shift
+- L2 -> Home
+- R2 -> End
+
+It uses `/opt/inttools/gptokeyb -c <config>`, matching the ArkOS setup used during testing. The mapping was verified while working on Pokemon Rejuvenation and is intended as the common Pokemon Essentials/mkxp-z controller profile for Reborn, Rejuvenation and Desolation.
+
+Example:
+
+```bash
+chmod +x controller/run-with-gptokeyb.sh
+controller/run-with-gptokeyb.sh "/roms/ports/Pokemon Rejuvenation"
+```
+
+## SDL / low-latency runtime settings
+
+`runtime/r36s-sdl-low-latency.sh` contains the R36S video/runtime settings used in the working setup:
+
+```bash
+export SDL_VIDEODRIVER=kmsdrm
+export SDL_VIDEO_DOUBLE_BUFFER=1
+```
+
+It can be sourced from custom launchers when users do not use the repository's main `run-mkxp-time64.sh`.
+
+## Development note
+
+These helpers collect fixes and runtime settings produced through iterative debugging and testing on real R36S hardware, with ChatGPT-assisted analysis. The repository is intended to keep the working solutions reproducible and easy to reference when helping other R36S users.
